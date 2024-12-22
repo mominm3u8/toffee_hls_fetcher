@@ -2,10 +2,10 @@ name: Update Toffee Channels
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # Run every 30 minutes
-  workflow_dispatch:  # Allow manual trigger
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
   push:
-    branches: [ main ]  # Also run on pushes to main
+    branches: [ main ]
 
 permissions:
   contents: write
@@ -25,6 +25,11 @@ jobs:
       with:
         python-version: '3.12'
     
+    - name: Install missing libraries
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libnss3 libgconf-2-4
+    
     - name: Set up Chrome
       uses: browser-actions/setup-chrome@latest
       with:
@@ -43,10 +48,8 @@ jobs:
         google-chrome --version
         chromedriver --version
         
-    - name: Run scraper
+    - name: Debug Selenium
       run: |
-        # Start Chrome in background
-        google-chrome --version
         export DISPLAY=:99
         sudo Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
         python toffee_scraper.py
