@@ -4,6 +4,7 @@ import json
 import re
 from datetime import datetime
 import time
+import random
 
 class ToffeeScraper:
     def __init__(self):
@@ -12,11 +13,47 @@ class ToffeeScraper:
         """
         self.base_url = "https://toffeelive.com"
         self.live_url = f"{self.base_url}/en/live"
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-        })
-        self.cookies = self._get_cookies()
+        self.session = self._create_session()
+        self.cookies = None
+        
+        # Try to get cookies multiple times
+        for i in range(3):
+            print(f"\nAttempt {i+1} to get cookies...")
+            self.cookies = self._get_cookies()
+            if self.cookies:
+                break
+            time.sleep(5)  # Wait between attempts
+
+    def _create_session(self):
+        """
+        Create a session with proper headers
+        """
+        session = requests.Session()
+        
+        # List of common user agents
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
+        ]
+        
+        headers = {
+            "User-Agent": random.choice(user_agents),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
+        }
+        
+        session.headers.update(headers)
+        return session
 
     def _get_cookies(self):
         """
@@ -24,22 +61,38 @@ class ToffeeScraper:
         """
         try:
             print("Accessing Toffee Live...")
+            
+            # First get the main page to get any session cookies
+            response = self.session.get(self.base_url)
+            time.sleep(2)  # Wait a bit
+            
+            # Now get the live page
             response = self.session.get(self.live_url)
-            print(response.text)
+            print("\nResponse Status:", response.status_code)
+            print("Response Headers:", dict(response.headers))
+            print("\nPage Content Preview:", response.text[:1000])
             
             if response.status_code != 200:
                 print(f"Failed to fetch page. Status code: {response.status_code}")
                 return None
             
-            cookie_match = re.search(r'Edge-Cache-Cookie=([^;\\]+)', response.text)
-            if cookie_match:
-                edge_cache_cookie = f"Edge-Cache-Cookie={cookie_match.group(1)}"
-                print("\nSuccessfully extracted Edge-Cache-Cookie:")
-                print(edge_cache_cookie)
-                return edge_cache_cookie
-            else:
-                print("Error: Edge-Cache-Cookie not found in page source")
-                return None
+            # Try different patterns to find the cookie
+            patterns = [
+                r'Edge-Cache-Cookie=([^;\\"\s]+)',
+                r'"Edge-Cache-Cookie":"([^"]+)"',
+                r'Edge-Cache-Cookie:\s*([^\s;]+)'
+            ]
+            
+            for pattern in patterns:
+                matches = re.findall(pattern, response.text)
+                if matches:
+                    edge_cache_cookie = f"Edge-Cache-Cookie={matches[0]}"
+                    print("\nSuccessfully extracted Edge-Cache-Cookie:")
+                    print(edge_cache_cookie)
+                    return edge_cache_cookie
+            
+            print("Error: Edge-Cache-Cookie not found in page source")
+            return None
             
         except Exception as e:
             print(f"Error extracting cookies: {str(e)}")
@@ -51,19 +104,31 @@ class ToffeeScraper:
         """
         try:
             print("\nGetting channel links...")
+            
+            # Refresh the session
+            self.session = self._create_session()
+            
+            # Get the live page
             response = self.session.get(self.live_url)
+            print("\nScraping Response Status:", response.status_code)
             
             if response.status_code != 200:
                 print(f"Failed to fetch page. Status code: {response.status_code}")
                 return []
 
-            # Find all m3u8 URLs
-            m3u8_urls = list(
-                set(
-                    url for url in re.findall(r'https://[^"]+\.m3u8', response.text)
-                    if "bldcmprod-cdn.toffeelive.com" in url
-                )
-            )
+            # Find all m3u8 URLs using multiple patterns
+            m3u8_patterns = [
+                r'https://[^"]+\.m3u8',
+                r'https://[\w\-\.]+/[\w\-\./]+\.m3u8',
+                r'"url":"(https://[^"]+\.m3u8)"'
+            ]
+            
+            m3u8_urls = set()
+            for pattern in m3u8_patterns:
+                urls = re.findall(pattern, response.text)
+                m3u8_urls.update([url for url in urls if "bldcmprod-cdn.toffeelive.com" in url])
+            
+            print(f"\nFound {len(m3u8_urls)} m3u8 URLs")
             
             channels = []
             for url in m3u8_urls:
