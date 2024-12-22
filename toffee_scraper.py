@@ -56,25 +56,74 @@ class ToffeeScraper:
             print("Accessing Toffee Live...")
             self.driver.get(self.live_url)
             print("Waiting for page load...")
-            time.sleep(10)  # Increased wait time
             
-            # Get page source and look for Edge-Cache-Cookie
+            # Wait longer for initial page load
+            time.sleep(15)
+            
+            # Scroll to trigger dynamic content loading
+            print("Scrolling page to trigger content loading...")
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(5)
+            
+            # Try to click on any video element to trigger stream
+            print("Attempting to interact with video elements...")
+            try:
+                self.driver.execute_script("""
+                    var elements = document.getElementsByTagName('video');
+                    if(elements.length > 0) {
+                        elements[0].click();
+                    }
+                    var playButtons = document.querySelectorAll('button[aria-label="Play"]');
+                    if(playButtons.length > 0) {
+                        playButtons[0].click();
+                    }
+                """)
+                time.sleep(10)
+            except Exception as e:
+                print(f"Error interacting with video: {str(e)}")
+            
+            # Get network logs to find cookie
+            print("Checking network logs for cookie...")
+            logs = self.driver.get_log('performance')
+            for log in logs:
+                if 'Edge-Cache-Cookie' in str(log):
+                    match = re.search(r'Edge-Cache-Cookie=([^;\\]+)', str(log))
+                    if match:
+                        edge_cache_cookie = f"Edge-Cache-Cookie={match.group(1)}"
+                        print("\nFound cookie in network logs:")
+                        print(edge_cache_cookie)
+                        return edge_cache_cookie
+            
+            # If not found in logs, check page source
+            print("Checking page source for cookie...")
             page_source = self.driver.page_source
-            print("Looking for Edge-Cache-Cookie in page source...")
             cookie_match = re.search(r'Edge-Cache-Cookie=([^;\\]+)', page_source)
             
             if cookie_match:
                 edge_cache_cookie = f"Edge-Cache-Cookie={cookie_match.group(1)}"
-                print("\nSuccessfully extracted Edge-Cache-Cookie:")
+                print("\nSuccessfully extracted Edge-Cache-Cookie from page source:")
                 print(edge_cache_cookie)
                 return edge_cache_cookie
             else:
                 print("Error: Edge-Cache-Cookie not found in page source")
-                print("Page source excerpt:", page_source[:500])  # Print first 500 chars for debugging
+                print("Page source excerpt:", page_source[:1000])  # Print more of the page source
+                
+                # Try one more time with extra wait
+                print("Trying one more time with extra wait...")
+                time.sleep(20)
+                page_source = self.driver.page_source
+                cookie_match = re.search(r'Edge-Cache-Cookie=([^;\\]+)', page_source)
+                if cookie_match:
+                    edge_cache_cookie = f"Edge-Cache-Cookie={cookie_match.group(1)}"
+                    print("\nSuccessfully extracted Edge-Cache-Cookie on second attempt:")
+                    print(edge_cache_cookie)
+                    return edge_cache_cookie
+                
                 return None
             
         except Exception as e:
             print(f"Error extracting cookies: {str(e)}")
+            print("Full error details:", str(e.__class__), str(e.__dict__))
             return None
 
     def get_channel_links(self):

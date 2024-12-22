@@ -45,10 +45,16 @@ jobs:
         
     - name: Run scraper
       run: |
-        # Start Chrome in background
-        google-chrome --version
+        # Start virtual display
         export DISPLAY=:99
         sudo Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+        sleep 2
+        
+        # Start Chrome with remote debugging
+        google-chrome --remote-debugging-port=9222 --enable-logging --v=1 &
+        sleep 5
+        
+        # Run the scraper
         python toffee_scraper.py
       env:
         PYTHONUNBUFFERED: 1
