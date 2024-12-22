@@ -4,35 +4,47 @@ on:
   schedule:
     - cron: '*/30 * * * *'  # Run every 30 minutes
   workflow_dispatch:  # Allow manual trigger
+  push:
+    branches: [ main ]  # Also run on pushes to main
+
+permissions:
+  contents: write
+  actions: write
 
 jobs:
   update-channels:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
     
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.12'
     
     - name: Install Chrome
       run: |
         sudo apt-get update
-        sudo apt-get install -y chromium-browser
+        sudo apt-get install -y chromium-browser chromium-chromedriver
         
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install selenium requests beautifulsoup4 webdriver-manager
         
     - name: Run scraper
       run: python toffee_scraper.py
+      env:
+        PYTHONUNBUFFERED: 1
         
     - name: Commit and push if changes
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
         git add toffee_channels.m3u
-        git diff --quiet && git diff --staged --quiet || (git commit -m "Update channels $(date '+%Y-%m-%d %H:%M:%S')" && git push)
+        timestamp=$(date -u)
+        git commit -m "Auto Update Channels: ${timestamp}" || exit 0
+        git push
