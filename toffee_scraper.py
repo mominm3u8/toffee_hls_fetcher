@@ -25,6 +25,7 @@ class ToffeeScraper:
         try:
             print("Accessing Toffee Live...")
             response = self.session.get(self.live_url)
+            print(response.text)
             
             if response.status_code != 200:
                 print(f"Failed to fetch page. Status code: {response.status_code}")
