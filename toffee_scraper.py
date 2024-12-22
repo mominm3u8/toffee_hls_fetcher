@@ -15,11 +15,31 @@ from webdriver_manager.chrome import ChromeDriverManager
 class ToffeeScraper:
     def __init__(self):
         """
-        Initialize the scraper with automated cookie extraction
+        Initialize the scraper with Chrome options
         """
+        print("Initializing Chrome options...")
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--start-maximized')
+        chrome_options.add_argument('--ignore-certificate-errors')
+        chrome_options.add_argument('--allow-running-insecure-content')
+        chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        
+        try:
+            print("Setting up Chrome WebDriver...")
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            print("Chrome WebDriver initialized successfully")
+        except Exception as e:
+            print(f"Error initializing Chrome WebDriver: {str(e)}")
+            raise
+
         self.base_url = "https://toffeelive.com"
         self.live_url = f"{self.base_url}/en/live"
-        self.driver = self._setup_driver()
         self.cookies = self._get_cookies()
         self.session = requests.Session()
         if self.cookies:
@@ -28,23 +48,6 @@ class ToffeeScraper:
                 'Cookie': self.cookies
             })
 
-    def _setup_driver(self):
-        """
-        Set up Chrome driver with necessary options
-        """
-        chrome_options = Options()
-        chrome_options.add_argument('--headless=new')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--enable-javascript')
-        
-        # Enable performance logging
-        chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL', 'browser': 'ALL'})
-        
-        service = Service(ChromeDriverManager().install())
-        return webdriver.Chrome(service=service, options=chrome_options)
-
     def _get_cookies(self):
         """
         Extract Edge-Cache-Cookie from the website
@@ -52,10 +55,12 @@ class ToffeeScraper:
         try:
             print("Accessing Toffee Live...")
             self.driver.get(self.live_url)
-            time.sleep(5)  # Wait for cookies to be set
+            print("Waiting for page load...")
+            time.sleep(10)  # Increased wait time
             
             # Get page source and look for Edge-Cache-Cookie
             page_source = self.driver.page_source
+            print("Looking for Edge-Cache-Cookie in page source...")
             cookie_match = re.search(r'Edge-Cache-Cookie=([^;\\]+)', page_source)
             
             if cookie_match:
@@ -65,6 +70,7 @@ class ToffeeScraper:
                 return edge_cache_cookie
             else:
                 print("Error: Edge-Cache-Cookie not found in page source")
+                print("Page source excerpt:", page_source[:500])  # Print first 500 chars for debugging
                 return None
             
         except Exception as e:
